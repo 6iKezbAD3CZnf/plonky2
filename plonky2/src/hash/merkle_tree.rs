@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::hash_types::RichField;
 use crate::hash::merkle_proofs::MerkleProof;
+use crate::hash::merkle_tree_cuda;
 use crate::plonk::config::{GenericHashOut, Hasher};
 use crate::util::log2_strict;
 
@@ -133,35 +134,48 @@ fn fill_digests_buf<F: RichField, H: Hasher<F>>(
 
 impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
     pub fn new(leaves: Vec<Vec<F>>, cap_height: usize) -> Self {
-        let log2_leaves_len = log2_strict(leaves.len());
-        assert!(
-            cap_height <= log2_leaves_len,
-            "cap_height={} should be at most log2(leaves.len())={}",
-            cap_height,
-            log2_leaves_len
-        );
+        if true {
+            let log2_leaves_len = log2_strict(leaves.len());
+            assert!(
+                cap_height <= log2_leaves_len,
+                "cap_height={} should be at most log2(leaves.len())={}",
+                cap_height,
+                log2_leaves_len
+            );
 
-        let num_digests = 2 * (leaves.len() - (1 << cap_height));
-        let mut digests = Vec::with_capacity(num_digests);
+            let num_digests = 2 * (leaves.len() - (1 << cap_height));
+            let mut digests = Vec::with_capacity(num_digests);
 
-        let len_cap = 1 << cap_height;
-        let mut cap = Vec::with_capacity(len_cap);
+            let len_cap = 1 << cap_height;
+            let mut cap = Vec::with_capacity(len_cap);
 
-        let digests_buf = capacity_up_to_mut(&mut digests, num_digests);
-        let cap_buf = capacity_up_to_mut(&mut cap, len_cap);
-        fill_digests_buf::<F, H>(digests_buf, cap_buf, &leaves[..], cap_height);
+            let digests_buf = capacity_up_to_mut(&mut digests, num_digests);
+            let cap_buf = capacity_up_to_mut(&mut cap, len_cap);
+            fill_digests_buf::<F, H>(digests_buf, cap_buf, &leaves[..], cap_height);
 
-        unsafe {
-            // SAFETY: `fill_digests_buf` and `cap` initialized the spare capacity up to
-            // `num_digests` and `len_cap`, resp.
-            digests.set_len(num_digests);
-            cap.set_len(len_cap);
-        }
+            unsafe {
+                // SAFETY: `fill_digests_buf` and `cap` initialized the spare capacity up to
+                // `num_digests` and `len_cap`, resp.
+                digests.set_len(num_digests);
+                cap.set_len(len_cap);
+            }
 
-        Self {
-            leaves,
-            digests,
-            cap: MerkleCap(cap),
+            Self {
+                leaves,
+                digests,
+                cap: MerkleCap(cap),
+            }
+        } else {
+            let (digests, cap) = merkle_tree_cuda::fill_digests_cuda::<F, <H as Hasher<F>>::Hash>(
+                leaves.clone(),
+                cap_height,
+            );
+
+            Self {
+                leaves,
+                digests,
+                cap: MerkleCap(cap),
+            }
         }
     }
 

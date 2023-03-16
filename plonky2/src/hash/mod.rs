@@ -4,6 +4,7 @@ pub mod hashing;
 pub mod keccak;
 pub mod merkle_proofs;
 pub mod merkle_tree;
+pub mod merkle_tree_cuda;
 pub mod path_compression;
 pub mod poseidon;
 pub mod poseidon_goldilocks;
