@@ -1,7 +1,7 @@
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleTree;
 
-const LOG_N: usize = 3; // For Poseidon-12
+const LOG_N: usize = 5; // For Poseidon-12
 
 fn random_data<F: RichField>(n: usize, k: usize) -> Vec<Vec<F>> {
     (0..n).map(|_| vec![F::ZERO; k]).collect()
@@ -17,13 +17,13 @@ pub(crate) fn main() {
 
     let log_n = LOG_N;
     let n = 1 << log_n;
-    let leaves = random_data::<F>(n, 8);
+    let leaves = random_data::<F>(n, 83);
 
-    let tree = MerkleTree::<F, <C as GenericConfig<D>>::Hasher>::new(leaves.clone(), 0);
+    let tree = MerkleTree::<F, <C as GenericConfig<D>>::Hasher>::new(leaves.clone(), 4);
 
-    for (i, l) in tree.leaves.iter().enumerate() {
-        println!("leave{} is {:x?}", i, l);
-    }
+    // for (i, l) in tree.leaves.iter().enumerate() {
+    //     println!("leave{} is {:x?}", i, l);
+    // }
 
     // let digests: <C as GenericConfig<D>>::Hasher = tree.digests;
     for (i, d) in tree.digests.iter().enumerate() {
