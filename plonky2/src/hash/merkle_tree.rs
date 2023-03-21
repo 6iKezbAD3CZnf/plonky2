@@ -142,42 +142,41 @@ impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
             log2_leaves_len
         );
 
-        let num_digests = 2 * (leaves.len() - (1 << cap_height));
-        let mut digests = Vec::with_capacity(num_digests);
+        if leaves.len() > (1 << cap_height) {
+            // if false {
+            let (digests, cap) = merkle_tree_cuda::construct_tree::<F, <H as Hasher<F>>::Hash>(
+                leaves.clone(),
+                cap_height,
+            );
 
-        let len_cap = 1 << cap_height;
-        let mut cap = Vec::with_capacity(len_cap);
+            Self {
+                leaves,
+                digests,
+                cap: MerkleCap(cap),
+            }
+        } else {
+            let num_digests = 2 * (leaves.len() - (1 << cap_height));
+            let mut digests = Vec::with_capacity(num_digests);
 
-        let digests_buf = capacity_up_to_mut(&mut digests, num_digests);
-        let cap_buf = capacity_up_to_mut(&mut cap, len_cap);
-        fill_digests_buf::<F, H>(digests_buf, cap_buf, &leaves[..], cap_height);
+            let len_cap = 1 << cap_height;
+            let mut cap = Vec::with_capacity(len_cap);
 
-        unsafe {
-            // SAFETY: `fill_digests_buf` and `cap` initialized the spare capacity up to
-            // `num_digests` and `len_cap`, resp.
-            digests.set_len(num_digests);
-            cap.set_len(len_cap);
-        }
+            let digests_buf = capacity_up_to_mut(&mut digests, num_digests);
+            let cap_buf = capacity_up_to_mut(&mut cap, len_cap);
+            fill_digests_buf::<F, H>(digests_buf, cap_buf, &leaves[..], cap_height);
 
-        let (my_digests, my_cap) = merkle_tree_cuda::fill_digests_cuda::<F, <H as Hasher<F>>::Hash>(
-            leaves.clone(),
-            cap_height,
-        );
+            unsafe {
+                // SAFETY: `fill_digests_buf` and `cap` initialized the spare capacity up to
+                // `num_digests` and `len_cap`, resp.
+                digests.set_len(num_digests);
+                cap.set_len(len_cap);
+            }
 
-        // dbg!(&cap);
-        // dbg!(&my_cap);
-        // for i in 0..digests.len() {
-        //     // println!("{:x?}", digests[i]);
-        //     println!("{:x?}", my_digests[i]);
-        //     // assert!(digests[i] == my_digests[i]);
-        // }
-        assert!(digests == my_digests);
-        assert!(cap == my_cap);
-
-        Self {
-            leaves,
-            digests: my_digests,
-            cap: MerkleCap(my_cap),
+            Self {
+                leaves,
+                digests,
+                cap: MerkleCap(cap),
+            }
         }
     }
 

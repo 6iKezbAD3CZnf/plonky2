@@ -2,7 +2,7 @@ use std::mem;
 
 #[link(name = "merkletree_cuda")]
 extern "C" {
-    fn digests_cap(
+    fn calculate_digests_caps(
         leaves: *const u64,
         num_leaves: u32,
         leave_len: u32,
@@ -11,26 +11,21 @@ extern "C" {
 }
 
 #[allow(unused_mut)]
-pub fn fill_digests_cuda<F, H: std::clone::Clone + std::fmt::Debug>(
+pub fn construct_tree<F, H: std::clone::Clone + std::fmt::Debug>(
     leaves: Vec<Vec<F>>,
     cap_height: usize,
 ) -> (Vec<H>, Vec<H>) {
     let num_leaves = leaves.len();
     let leave_len = leaves[0].len();
-    let num_digests = 2 * (leaves.len() - (1 << cap_height));
 
     let mut tmp: &[H];
     let mut digests: Vec<H>;
     let mut cap: Vec<H>;
     let flattened_leaves = leaves.into_iter().flatten().collect::<Vec<F>>();
 
-    // dbg!(num_leaves);
-    // dbg!(leave_len);
-    // dbg!(cap_height);
-
     unsafe {
         let leaves_ptr = mem::transmute::<*const F, *const u64>(flattened_leaves.as_ptr());
-        let digests_cap_ptr = mem::transmute::<*mut u64, *mut H>(digests_cap(
+        let digests_cap_ptr = mem::transmute::<*mut u64, *mut H>(calculate_digests_caps(
             leaves_ptr,
             num_leaves as u32,
             leave_len as u32,
