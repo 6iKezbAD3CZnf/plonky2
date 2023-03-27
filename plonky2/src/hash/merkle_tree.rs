@@ -134,6 +134,8 @@ fn fill_digests_buf<F: RichField, H: Hasher<F>>(
 
 impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
     pub fn new(leaves: Vec<Vec<F>>, cap_height: usize) -> Self {
+        use std::time::Instant;
+
         let log2_leaves_len = log2_strict(leaves.len());
         assert!(
             cap_height <= log2_leaves_len,
@@ -144,9 +146,34 @@ impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
 
         if leaves.len() > (1 << cap_height) {
             // if false {
+            let start = Instant::now();
+
+            let start0 = Instant::now();
+            let cloned_leaves = leaves.clone();
+            let end0 = start0.elapsed();
+            println!(
+                "GPU: leave clone() = {}.{:03} sec",
+                end0.as_secs(),
+                end0.subsec_millis()
+            );
+
+            let start1 = Instant::now();
             let (digests, cap) = merkle_tree_cuda::construct_tree::<F, <H as Hasher<F>>::Hash>(
-                leaves.clone(),
+                cloned_leaves,
                 cap_height,
+            );
+            let end1 = start1.elapsed();
+            println!(
+                "GPU: construct_tree() = {}.{:03} sec",
+                end1.as_secs(),
+                end1.subsec_millis()
+            );
+
+            let end = start.elapsed();
+            println!(
+                "GPU: Tree construction = {}.{:03} sec",
+                end.as_secs(),
+                end.subsec_millis()
             );
 
             Self {
@@ -155,6 +182,8 @@ impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
                 cap: MerkleCap(cap),
             }
         } else {
+            let start = Instant::now();
+
             let num_digests = 2 * (leaves.len() - (1 << cap_height));
             let mut digests = Vec::with_capacity(num_digests);
 
@@ -171,6 +200,13 @@ impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
                 digests.set_len(num_digests);
                 cap.set_len(len_cap);
             }
+
+            let end = start.elapsed();
+            println!(
+                "Rayon: Tree construction = {}.{:03} sec",
+                end.as_secs(),
+                end.subsec_millis()
+            );
 
             Self {
                 leaves,
