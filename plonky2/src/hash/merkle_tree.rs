@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::hash_types::RichField;
 use crate::hash::merkle_proofs::MerkleProof;
-use crate::hash::merkle_tree_cuda;
 use crate::plonk::config::{GenericHashOut, Hasher};
 use crate::util::log2_strict;
 
@@ -134,8 +133,6 @@ fn fill_digests_buf<F: RichField, H: Hasher<F>>(
 
 impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
     pub fn new(leaves: Vec<Vec<F>>, cap_height: usize) -> Self {
-        use std::time::Instant;
-
         let log2_leaves_len = log2_strict(leaves.len());
         assert!(
             cap_height <= log2_leaves_len,
@@ -144,46 +141,33 @@ impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
             log2_leaves_len
         );
 
-        if leaves.len() > (1 << cap_height) {
-            // if false {
-            let start = Instant::now();
+        #[cfg(feature = "gpu")]
+        {
+            use crate::hash::merkle_tree_cuda;
 
-            let start0 = Instant::now();
-            let cloned_leaves = leaves.clone();
-            let end0 = start0.elapsed();
-            println!(
-                "GPU: leave clone() = {}.{:03} sec",
-                end0.as_secs(),
-                end0.subsec_millis()
+            // TODO: Cuda code is implemented in the case where
+            // F == GoldilocksField and H == PoseidonHash.
+            // This filter is not perfect.
+            let gpu_condition = (leaves.len() > (1 << cap_height))
+                    && (F::ORDER == 0xFFFFFFFF00000001) // GoldilocksField
+                    && (H::HASH_SIZE == 32); // PoseidonHash
+            assert!(
+                gpu_condition,
+                "F is not GoldilocksField or H is not PoseidonHash",
             );
-
-            let start1 = Instant::now();
+            let cloned_leaves = leaves.clone();
             let (digests, cap) = merkle_tree_cuda::construct_tree::<F, <H as Hasher<F>>::Hash>(
                 cloned_leaves,
                 cap_height,
             );
-            let end1 = start1.elapsed();
-            println!(
-                "GPU: construct_tree() = {}.{:03} sec",
-                end1.as_secs(),
-                end1.subsec_millis()
-            );
-
-            let end = start.elapsed();
-            println!(
-                "GPU: Tree construction = {}.{:03} sec",
-                end.as_secs(),
-                end.subsec_millis()
-            );
-
-            Self {
+            return Self {
                 leaves,
                 digests,
                 cap: MerkleCap(cap),
-            }
-        } else {
-            let start = Instant::now();
-
+            };
+        }
+        #[cfg(not(feature = "gpu"))]
+        {
             let num_digests = 2 * (leaves.len() - (1 << cap_height));
             let mut digests = Vec::with_capacity(num_digests);
 
@@ -201,18 +185,11 @@ impl<F: RichField, H: Hasher<F>> MerkleTree<F, H> {
                 cap.set_len(len_cap);
             }
 
-            let end = start.elapsed();
-            println!(
-                "Rayon: Tree construction = {}.{:03} sec",
-                end.as_secs(),
-                end.subsec_millis()
-            );
-
-            Self {
+            return Self {
                 leaves,
                 digests,
                 cap: MerkleCap(cap),
-            }
+            };
         }
     }
 

@@ -15,8 +15,6 @@ pub fn construct_tree<F, H: std::clone::Clone + std::fmt::Debug>(
     leaves: Vec<Vec<F>>,
     cap_height: usize,
 ) -> (Vec<H>, Vec<H>) {
-    use std::time::Instant;
-
     let num_leaves = leaves.len();
     let leave_len = leaves[0].len();
 
@@ -24,35 +22,17 @@ pub fn construct_tree<F, H: std::clone::Clone + std::fmt::Debug>(
     let mut digests: Vec<H>;
     let mut cap: Vec<H>;
 
-    let start0 = Instant::now();
     let flattened_leaves = leaves.into_iter().flatten().collect::<Vec<F>>();
-    let end0 = start0.elapsed();
-    println!(
-        "GPU: leaves flattern = {}.{:03} sec",
-        end0.as_secs(),
-        end0.subsec_millis()
-    );
 
     unsafe {
         let leaves_ptr = mem::transmute::<*const F, *const u64>(flattened_leaves.as_ptr());
 
-        let start1 = Instant::now();
-        dbg!(num_leaves);
-        dbg!(leave_len);
-        dbg!(cap_height);
         let digests_cap_ptr = mem::transmute::<*mut u64, *mut H>(calculate_digests_caps(
             leaves_ptr,
             num_leaves as u32,
             leave_len as u32,
             cap_height as u32,
         ));
-        let end1 = start1.elapsed();
-        println!(
-            "GPU: calculate_digests_caps() = {}.{:03} sec",
-            end1.as_secs(),
-            end1.subsec_millis()
-        );
-
         // let cap_start = digests_cap_ptr.add(num_digests);
         // digests = Vec::from_raw_parts(digests_cap_ptr as *mut _, num_digests, num_digests);
 
